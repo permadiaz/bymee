@@ -2,6 +2,7 @@ import { demoAnalysis } from "./demo";
 import { sections, systemPrompt } from "./prompts";
 import { resultSchema, type RunInput, type Mode } from "./types";
 import { AIError, providerError } from "./errors";
+import { requestAI } from "./request";
 export interface AIProvider {
   analyze(input: RunInput): Promise<ReturnType<typeof resultSchema.parse>>;
 }
@@ -21,7 +22,7 @@ export const provider: AIProvider = {
       );
     let response: Response;
     try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
+      response = await requestAI(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
