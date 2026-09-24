@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { inputSchema } from "@/lib/ai/types";
 import { provider } from "@/lib/ai/provider";
+import { AIError } from "@/lib/ai/errors";
 export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
@@ -70,6 +71,13 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(await provider.analyze(input.data));
   } catch (error) {
+    if (error instanceof AIError) {
+      console.warn("BYMEE AI request failed", { code: error.code });
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.httpStatus },
+      );
+    }
     return NextResponse.json(
       {
         error:
