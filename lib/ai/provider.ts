@@ -3,6 +3,7 @@ import { sections, systemPrompt } from "./prompts";
 import { resultSchema, type RunInput, type Mode } from "./types";
 import { AIError, providerError } from "./errors";
 import { requestAI } from "./request";
+import { geminiRequest, geminiText, isDirectGemini } from "./gemini";
 export interface AIProvider {
   analyze(input: RunInput): Promise<ReturnType<typeof resultSchema.parse>>;
 }
@@ -21,26 +22,35 @@ export const provider: AIProvider = {
         503,
       );
     let response: Response;
+    const nativeGemini = isDirectGemini(baseUrl);
+    const prompt =
+      systemPrompt + ` Required sections: ${sections[input.mode].join(", ")}`;
     try {
-      response = await requestAI(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "system",
-              content:
-                systemPrompt +
-                ` Required sections: ${sections[input.mode].join(", ")}`,
+      const request = nativeGemini
+        ? geminiRequest(model, apiKey, prompt, input)
+        : {
+            url: `${baseUrl}/chat/completions`,
+            init: {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model,
+                messages: [
+                  {
+                    role: "system",
+                    content: prompt,
+                  },
+                  { role: "user", content: JSON.stringify(input) },
+                ],
+                response_format: { type: "json_object" },
+              }),
             },
-            { role: "user", content: JSON.stringify(input) },
-          ],
-          response_format: { type: "json_object" },
-        }),
+          };
+      response = await requestAI(request.url, {
+        ...request.init,
         signal: AbortSignal.timeout(45000),
       });
     } catch (error) {
@@ -58,14 +68,30 @@ export const provider: AIProvider = {
         "AI_CONNECTION_FAILED",
       );
     }
-    if (!response.ok) throw await providerError(response);
+    if (!response.ok) {
+      const error = await providerError(response);
+      // Only non-sensitive diagnostics; never log headers, API key, prompt, or raw response.
+      console.warn("BYMEE provider rejection", {
+        provider: nativeGemini ? "gemini-native" : "compatible",
+        status: response.status,
+        code: error.code,
+      });
+      throw new AIError(
+        `${error.message} [${nativeGemini ? "Gemini native" : "Compatible"} HTTP ${response.status}]`,
+        error.code,
+        error.httpStatus,
+      );
+    }
     try {
       const body = await response.json();
       const parsed = resultSchema.parse(
-        JSON.parse(body.choices[0].message.content),
+        JSON.parse(
+          nativeGemini ? geminiText(body) : body.choices[0].message.content,
+        ),
       );
       return { ...parsed, demo: false };
-    } catch {
+    } catch (error) {
+      if (error instanceof AIError) throw error;
       throw new AIError(
         "Respons AI tidak sesuai struktur BYMEE. Coba lagi; jika berulang, gunakan model yang mendukung JSON output.",
         "AI_INVALID_OUTPUT",

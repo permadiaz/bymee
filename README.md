@@ -28,6 +28,8 @@ RLS applies to all nine tables. Composite foreign keys prevent cross-user compan
 
 ## AI providers
 
+Direct Google Gemini endpoints (`AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`) are automatically routed through the native `generateContent` API. Existing environment variables remain valid. Gemini requests include a JSON Schema derived from BYMEE's output validator, and distinguish blocked, empty, and truncated output. Other providers continue using chat completions. Upstream failures show the adapter and HTTP status; server logs exclude API keys, customer context, and raw provider responses. Native adapter behavior is verified with mocked responses; real project credentials are required for live validation.
+
 `lib/ai/provider.ts` implements the `AIProvider` interface. `DEMO_MODE=true` selects free local templates. Setting false enables an OpenAI-compatible chat-completions adapter with a server-only API key, a 45-second timeout, and Zod output validation.
 
 Set `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` for your chosen OpenAI-compatible provider. OpenAI, OpenRouter, and Gemini's compatibility endpoint can be configured without changing React components. Providers/models must support JSON object responses. Native provider adapters can implement `AIProvider` if compatibility differs. There is no silent demo fallback in live mode. Paid APIs can incur costs; demo mode performs no AI network calls. Free-tier eligibility and limits depend on hosting providers and usage.
